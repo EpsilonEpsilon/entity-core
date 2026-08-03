@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>entity-core — Architecture</title>
+<style>
+  :root {
+    --bg: #0f1117; --panel: #161a23; --panel2: #1c2130; --border: #2a3040;
+    --text: #e6e9f0; --muted: #8b93a7;
+    --core: #7c5cff; --entity: #2dd4bf; --data: #f59e0b; --ext: #f43f5e;
+    --config: #60a5fa; --cap: #ec4899; --event: #22c55e; --ai: #a855f7; --out: #fb923c;
+    --warn: #ef4444;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg:#f6f7fb; --panel:#ffffff; --panel2:#eef1f7; --border:#dde1ec; --text:#1c2130; --muted:#5d667c; }
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 32px 16px 64px; }
+  .wrap { max-width: 1300px; margin: 0 auto; }
+  h1 { font-size: 24px; letter-spacing: -0.02em; }
+  h1 code { font-family: "SF Mono", ui-monospace, Menlo, monospace; color: var(--core); }
+  .sub { color: var(--muted); margin: 6px 0 22px; font-size: 14px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 13px; font-size: 12.5px; color: var(--muted); margin-bottom: 18px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  .dot.round { border-radius: 50%; }
+  .diagram { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 12px; overflow-x: auto; }
+  svg { display: block; min-width: 1180px; width: 100%; height: auto; }
+  .node text { fill: var(--text); font-size: 12.5px; font-weight: 600; }
+  .node .sublabel { fill: var(--muted); font-size: 10px; font-weight: 400; font-family: "SF Mono", ui-monospace, Menlo, monospace; }
+  .zone { fill: none; stroke-dasharray: 5 5; rx: 14; opacity: 0.5; }
+  .zonelabel { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+  .edge { stroke: var(--muted); stroke-width: 1.5; fill: none; opacity: 0.85; stroke-linejoin: round; }
+  .edgelabel { fill: var(--muted); font-size: 9.5px; font-style: italic; }
+  .inedge { stroke: var(--event); stroke-width: 1.9; fill: none; stroke-linejoin: round; }
+  .inlabel { fill: var(--event); font-size: 9.5px; font-style: italic; font-weight: 600; }
+  .outedge { stroke: var(--out); stroke-width: 1.9; fill: none; stroke-linejoin: round; }
+  .outlabel { fill: var(--out); font-size: 9.5px; font-style: italic; font-weight: 600; }
+  .aiedge { stroke: var(--ai); stroke-width: 1.9; fill: none; stroke-linejoin: round; }
+  .ailabel { fill: var(--ai); font-size: 9.5px; font-style: italic; font-weight: 600; }
+  .badge circle { fill: var(--warn); }
+  .badge text { fill: #fff; font-size: 11px; font-weight: 800; }
+  .notes { margin-top: 24px; font-size: 13.5px; color: var(--muted); line-height: 1.65; }
+  .notes b { color: var(--text); }
+  .notes code { font-family: "SF Mono", ui-monospace, Menlo, monospace; color: var(--text); background: var(--panel2); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+  .notes h2 { font-size: 14px; color: var(--text); margin: 22px 0 8px; letter-spacing: -0.01em; }
+  .notes ol, .notes ul { margin: 0 0 0 20px; }
+  .notes li { margin-bottom: 7px; }
+  .gaps { margin-top: 22px; border: 1px solid var(--border); border-left: 3px solid var(--warn); border-radius: 10px; padding: 14px 18px; background: var(--panel); }
+  .gaps h2 { margin-top: 0; }
+  .pill { display: inline-block; background: var(--warn); color: #fff; border-radius: 50%; width: 16px; height: 16px; text-align: center; font-size: 11px; font-weight: 800; line-height: 16px; margin-right: 5px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1><code>entity-core</code> — Architecture</h1>
+  <p class="sub">NestJS · per-account runtimes · closed perceive→decide→act loop · Gemini planner · capability-only vocabulary · Telegram</p>
+
+  <div class="legend">
+    <span><i class="dot" style="background:var(--core)"></i> core / orchestration</span>
+    <span><i class="dot" style="background:var(--ext)"></i> platform impl</span>
+    <span><i class="dot" style="background:var(--event)"></i> inbound (perceive)</span>
+    <span><i class="dot" style="background:var(--ai)"></i> ai (decide)</span>
+    <span><i class="dot" style="background:var(--out)"></i> outbound (act)</span>
+    <span><i class="dot" style="background:var(--cap)"></i> capabilities — the vocabulary</span>
+    <span><i class="dot" style="background:var(--entity)"></i> entities</span>
+    <span><i class="dot" style="background:var(--data)"></i> persistence</span>
+    <span><i class="dot round" style="background:var(--warn)"></i> known gap</span>
+  </div>
+
+  <div class="diagram">
+  <svg viewBox="0 0 1300 1030" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="var(--muted)"/></marker>
+      <marker id="tri" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="12" markerHeight="12" orient="auto-start-reverse"><path d="M1 1 L11 6 L1 11 z" fill="none" stroke="var(--core)" stroke-width="1.3"/></marker>
+      <marker id="triC" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="12" markerHeight="12" orient="auto-start-reverse"><path d="M1 1 L11 6 L1 11 z" fill="none" stroke="var(--cap)" stroke-width="1.3"/></marker>
+      <marker id="arrowE" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="var(--event)"/></marker>
+      <marker id="arrowO" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="var(--out)"/></marker>
+      <marker id="arrowA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="var(--ai)"/></marker>
+      <marker id="arrowC" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="var(--cap)"/></marker>
+    </defs>
+
+    <!-- ═══════ Zones ═══════ -->
+    <rect class="zone" x="20"  y="64"  width="560" height="152" stroke="var(--core)"/>
+    <text class="zonelabel" x="36" y="86" fill="var(--core)">core — bootstrap &amp; DI</text>
+
+    <rect class="zone" x="20"  y="228" width="560" height="150" stroke="var(--core)"/>
+    <text class="zonelabel" x="36" y="250" fill="var(--core)">platform runtime</text>
+
+    <rect class="zone" x="640" y="64"  width="620" height="152" stroke="var(--event)"/>
+    <text class="zonelabel" x="656" y="86" fill="var(--event)">platform events — inbound</text>
+
+    <rect class="zone" x="20"  y="392" width="560" height="380" stroke="var(--core)" opacity="0.35"/>
+    <text class="zonelabel" x="36" y="414" fill="var(--muted)">runtime loop  ·  perceive → decide → act</text>
+
+    <rect class="zone" x="640" y="392" width="620" height="380" stroke="var(--cap)"/>
+    <text class="zonelabel" x="656" y="414" fill="var(--cap)">capabilities  —  one list · schema at decide-time · execute at act-time</text>
+
+    <rect class="zone" x="20"  y="800" width="600" height="212" stroke="var(--entity)"/>
+    <text class="zonelabel" x="36" y="822" fill="var(--entity)">entities — domain &amp; data</text>
+
+    <rect class="zone" x="660" y="800" width="600" height="212" stroke="var(--data)"/>
+    <text class="zonelabel" x="676" y="822" fill="var(--data)">persistence</text>
+
+    <!-- ══════════ EDGES ══════════ -->
+    <!-- entry -->
+    <path class="edge" d="M 160 31 H 190" marker-end="url(#arrow)"/>
+    <path class="edge" d="M 310 31 H 340" marker-end="url(#arrow)"/>
+    <path class="edge" d="M 250 50 V 72 H 158 V 92" marker-end="url(#arrow)"/>
+    <!-- setup -->
+    <path class="edge" d="M 272 114 H 300" marker-end="url(#arrow)"/>
+    <path class="edge" d="M 158 136 V 150" marker-end="url(#arrow)"/>
+    <path class="edge" d="M 272 172 H 300" marker-end="url(#arrow)"/>
+    <!-- factory creates telegram runtime -->
+    <path class="edge" d="M 418 194 V 256" marker-end="url(#arrow)"/>
+    <!-- orchestrator init + subscribe -->
+    <path class="edge" d="M 536 114 H 556 V 286 H 536" marker-end="url(#arrow)"/>
+    <!-- telegram extends platform -->
+    <path class="edge" d="M 300 308 H 280" stroke="var(--core)" stroke-dasharray="6 4" marker-end="url(#tri)"/>
+
+    <!-- PERCEIVE: $events -> handler -> pipeline -> planner -->
+    <path class="inedge" d="M 418 360 V 400" marker-end="url(#arrowE)"/>
+    <path class="inedge" d="M 425 450 V 470" marker-end="url(#arrowE)"/>
+    <path class="inedge" d="M 425 520 V 548" marker-end="url(#arrowE)"/>
+    <!-- pipeline -> resolver -->
+    <path class="inedge" d="M 550 495 H 568 V 721 H 550" marker-end="url(#arrowE)"/>
+
+    <!-- DECIDE: planner <-> gemini, planner -> vocabulary -->
+    <path class="aiedge" d="M 300 577 H 262" marker-end="url(#arrowA)"/>
+    <path class="aiedge" d="M 550 566 H 612 V 516 H 664" marker-end="url(#arrowA)"/>
+    <!-- planner -> IPlan -> resolver -->
+    <path class="edge" d="M 420 606 V 632" marker-end="url(#arrow)"/>
+    <path class="edge" d="M 420 670 V 696" marker-end="url(#arrow)"/>
+
+    <!-- ACT: resolver -> vocabulary -->
+    <path class="outedge" d="M 550 712 H 628 V 530 H 664" marker-end="url(#arrowO)"/>
+    <!-- vocabulary -> the two sources -->
+    <path class="edge" d="M 800 546 V 566" stroke="var(--cap)" marker-end="url(#arrowC)"/>
+    <path class="edge" d="M 1100 546 V 566" stroke="var(--cap)" marker-end="url(#arrowC)"/>
+    <!-- platform contracts <- telegram impls (implements) -->
+    <path class="edge" d="M 1100 682 V 664" stroke="var(--cap)" stroke-dasharray="6 4" marker-end="url(#triC)"/>
+    <!-- telegram runtime creates its capabilities -->
+    <path class="edge" d="M 536 350 H 596 V 706 H 664" stroke="var(--ext)" stroke-dasharray="5 4" marker-end="url(#arrow)"/>
+    <!-- capabilities -> telegram client (outbound I/O) -->
+    <path class="outedge" d="M 664 736 H 576 V 332 H 536" marker-end="url(#arrowO)"/>
+
+    <!-- bootstrap -> persona service -->
+    <path class="edge" d="M 44 114 H 30 V 876 H 44" marker-end="url(#arrow)"/>
+    <path class="edge" d="M 129 900 V 936" marker-end="url(#arrow)"/>
+    <path class="edge" d="M 214 959 H 236" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+    <path class="edge" d="M 321 900 V 918 H 129 V 936" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+    <path class="edge" d="M 428 876 H 406" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+    <path class="edge" d="M 129 852 V 836 H 834 V 852" marker-end="url(#arrow)"/>
+    <path class="edge" d="M 834 900 V 936" marker-end="url(#arrow)"/>
+
+    <!-- ══════════ EDGE LABELS ══════════ -->
+    <g class="edgelabel">
+      <text x="274" y="110">run()</text>
+      <text x="164" y="147">build()</text>
+      <text x="274" y="168">get()</text>
+      <text x="424" y="240">create()</text>
+      <text x="560" y="240">init()+subscribe</text>
+      <text x="290" y="374" text-anchor="middle" fill="var(--core)">extends</text>
+      <text x="428" y="626">IPlan[] (raw JSON)</text>
+      <text x="600" y="346" fill="var(--ext)">initCapabilities()</text>
+      <text x="1110" y="676" fill="var(--cap)">extends</text>
+      <text x="34" y="470">getListOfPersonas()</text>
+      <text x="224" y="915">wraps</text>
+      <text x="224" y="951">1─N</text>
+      <text x="500" y="832">repositories (TypeORM)</text>
+    </g>
+    <text class="inlabel" x="424" y="392">$events → process()</text>
+    <text class="inlabel" x="430" y="465">route by instanceof</text>
+    <text class="inlabel" x="430" y="543">plan()</text>
+    <text class="inlabel" x="572" y="640">resolve()</text>
+    <text class="ailabel" x="152" y="622" text-anchor="middle">generate(prompt, jsonSchema)</text>
+    <text class="ailabel" x="556" y="558">schema → JSON Schema</text>
+    <text class="outlabel" x="582" y="300">TelegramClient — outbound reply</text>
+
+    <!-- ══════════ NODES ══════════ -->
+    <!-- Entry -->
+    <g class="node">
+      <rect x="40" y="12" width="120" height="38" rx="9" fill="var(--panel)" stroke="var(--core)" stroke-width="1.5"/>
+      <text x="100" y="30" text-anchor="middle">main.ts</text>
+      <text x="100" y="43" text-anchor="middle" class="sublabel">bootstrap</text>
+    </g>
+    <g class="node">
+      <rect x="190" y="12" width="120" height="38" rx="9" fill="var(--panel)" stroke="var(--core)" stroke-width="1.5"/>
+      <text x="250" y="30" text-anchor="middle">AppModule</text>
+      <text x="250" y="43" text-anchor="middle" class="sublabel">root</text>
+    </g>
+    <g class="node">
+      <rect x="340" y="12" width="170" height="38" rx="9" fill="var(--panel)" stroke="var(--config)" stroke-width="1.5"/>
+      <text x="425" y="30" text-anchor="middle">ConfigModule (global)</text>
+      <text x="425" y="43" text-anchor="middle" class="sublabel">env → db / telegram / ai</text>
+    </g>
+
+    <!-- Setup -->
+    <g class="node">
+      <rect x="44" y="92" width="228" height="44" rx="9" fill="var(--panel)" stroke="var(--core)" stroke-width="1.5"/>
+      <text x="158" y="111" text-anchor="middle">AppBootstrapService</text>
+      <text x="158" y="126" text-anchor="middle" class="sublabel">build all → run each</text>
+    </g>
+    <g class="node">
+      <rect x="44" y="150" width="228" height="44" rx="9" fill="var(--panel)" stroke="var(--core)" stroke-width="1.5"/>
+      <text x="158" y="169" text-anchor="middle">RuntimeContextBuilder</text>
+      <text x="158" y="184" text-anchor="middle" class="sublabel">one context / account</text>
+    </g>
+    <g class="node">
+      <rect x="300" y="92" width="236" height="44" rx="9" fill="var(--panel)" stroke="var(--core)" stroke-width="1.8"/>
+      <text x="418" y="111" text-anchor="middle">RuntimeOrchestrator</text>
+      <text x="418" y="126" text-anchor="middle" class="sublabel">init + subscribe($events)</text>
+    </g>
+    <g class="node">
+      <rect x="300" y="150" width="236" height="44" rx="9" fill="var(--panel)" stroke="var(--core)" stroke-width="1.5"/>
+      <text x="418" y="169" text-anchor="middle">PlatformRuntimeFactory</text>
+      <text x="418" y="184" text-anchor="middle" class="sublabel">ModuleRef.create() · per acct</text>
+    </g>
+
+    <!-- Platform runtime -->
+    <g class="node">
+      <rect x="44" y="256" width="236" height="104" rx="9" fill="var(--panel)" stroke="var(--core)" stroke-width="2" stroke-dasharray="6 3"/>
+      <text x="162" y="278" text-anchor="middle">PlatformRuntime «abstract»</text>
+      <text x="162" y="296" text-anchor="middle" class="sublabel">init(creds): Promise&lt;void&gt;</text>
+      <text x="162" y="310" text-anchor="middle" class="sublabel">$events: Observable</text>
+      <text x="162" y="324" text-anchor="middle" class="sublabel">capabilities[]  ← only list</text>
+      <text x="162" y="338" text-anchor="middle" class="sublabel">get&lt;T&gt;() · has() · getAll()</text>
+    </g>
+    <g class="node">
+      <rect x="300" y="256" width="236" height="104" rx="9" fill="var(--panel)" stroke="var(--ext)" stroke-width="1.6"/>
+      <text x="418" y="278" text-anchor="middle">TelegramRuntime</text>
+      <text x="418" y="296" text-anchor="middle" class="sublabel">Subject $events (rxjs)</text>
+      <text x="418" y="310" text-anchor="middle" class="sublabel">state machine · gramJS</text>
+      <text x="418" y="324" text-anchor="middle" class="sublabel">registerListeners()</text>
+      <text x="418" y="338" text-anchor="middle" class="sublabel">initCapabilities(client)</text>
+    </g>
+
+    <!-- Events catalog -->
+    <g class="node">
+      <rect x="660" y="96" width="580" height="104" rx="9" fill="var(--panel)" stroke="var(--event)" stroke-width="1.5"/>
+      <text x="676" y="120" text-anchor="start">PlatformEvent «interface» — platform: PlatformType</text>
+      <text x="676" y="142" text-anchor="start" style="font-size:11.5px" fill="var(--text)">IncomingMessagePlatformEvent</text>
+      <text x="676" y="160" text-anchor="start" class="sublabel">message · senderId · message_id</text>
+      <text x="676" y="178" text-anchor="start" class="sublabel">conversation: ConversationRef  (chat handle)</text>
+    </g>
+
+    <!-- Loop: perceive / decide / act -->
+    <g class="node">
+      <rect x="300" y="400" width="250" height="50" rx="9" fill="var(--panel)" stroke="var(--event)" stroke-width="1.6"/>
+      <text x="425" y="420" text-anchor="middle">PlatformEventHandlerService</text>
+      <text x="425" y="436" text-anchor="middle" class="sublabel">routes by event instanceof</text>
+    </g>
+    <g class="node">
+      <rect x="300" y="470" width="250" height="50" rx="9" fill="var(--panel)" stroke="var(--event)" stroke-width="1.6"/>
+      <text x="425" y="490" text-anchor="middle">IncomingMessagePipeline</text>
+      <text x="425" y="506" text-anchor="middle" class="sublabel">plan() then resolve()</text>
+    </g>
+    <g class="node">
+      <rect x="300" y="548" width="250" height="58" rx="9" fill="var(--panel)" stroke="var(--ai)" stroke-width="1.6"/>
+      <text x="425" y="568" text-anchor="middle">SendMessagePlannerService</text>
+      <text x="425" y="583" text-anchor="middle" class="sublabel">vocabulary → z.toJSONSchema</text>
+      <text x="425" y="596" text-anchor="middle" class="sublabel">→ Gemini → IPlan[]   (DECIDE)</text>
+    </g>
+    <g class="node">
+      <rect x="330" y="632" width="180" height="38" rx="9" fill="var(--panel2)" stroke="var(--muted)" stroke-width="1.3"/>
+      <text x="420" y="651" text-anchor="middle" style="font-size:12px">IPlan[]</text>
+      <text x="420" y="664" text-anchor="middle" class="sublabel">name + args (JSON)</text>
+    </g>
+    <g class="badge"><circle cx="502" cy="640" r="9"/><text x="502" y="644" text-anchor="middle">3</text></g>
+    <g class="node">
+      <rect x="300" y="696" width="250" height="50" rx="9" fill="var(--panel)" stroke="var(--out)" stroke-width="1.6"/>
+      <text x="425" y="716" text-anchor="middle">PlaneResolverService</text>
+      <text x="425" y="732" text-anchor="middle" class="sublabel">match name → execute()   (ACT)</text>
+    </g>
+    <g class="badge"><circle cx="542" cy="704" r="9"/><text x="542" y="708" text-anchor="middle">4</text></g>
+
+    <!-- AI (Gemini) -->
+    <g class="node">
+      <rect x="42" y="548" width="220" height="58" rx="9" fill="var(--panel)" stroke="var(--ai)" stroke-width="1.6"/>
+      <text x="152" y="570" text-anchor="middle">GeminiService</text>
+      <text x="152" y="585" text-anchor="middle" class="sublabel">@google/genai</text>
+      <text x="152" y="598" text-anchor="middle" class="sublabel">gemini-flash-latest</text>
+    </g>
+
+    <!-- ═══ Capability catalog — the single vocabulary ═══ -->
+    <g class="node">
+      <rect x="664" y="424" width="576" height="70" rx="8" fill="var(--panel)" stroke="var(--cap)" stroke-width="1.6"/>
+      <text x="676" y="446" text-anchor="start">Capability «abstract»  —  the only thing the planner can choose</text>
+      <text x="676" y="466" text-anchor="start" class="sublabel">name: CapabilityEnum · description (prompt) · schema: Zod</text>
+      <text x="676" y="482" text-anchor="start" class="sublabel">execute(args ← runtime-injected, input ← model-filled)</text>
+    </g>
+
+    <g class="node">
+      <rect x="664" y="506" width="576" height="40" rx="8" fill="var(--panel2)" stroke="var(--cap)" stroke-width="1.3" stroke-dasharray="5 3"/>
+      <text x="952" y="531" text-anchor="middle" style="font-size:11.5px">vocabulary  =  platform.getAllCapabilities()  ∪  appRegistry.getRegistry()</text>
+    </g>
+
+    <g class="node">
+      <rect x="664" y="566" width="276" height="98" rx="8" fill="var(--panel2)" stroke="var(--cap)" stroke-width="1.3"/>
+      <text x="676" y="588" text-anchor="start" style="font-size:12px">AppCapabilitiesRegistry</text>
+      <text x="676" y="606" text-anchor="start" class="sublabel">AppCapability «abstract»</text>
+      <text x="676" y="622" text-anchor="start" class="sublabel">AppDelayCapability — pause N ms</text>
+      <text x="676" y="638" text-anchor="start" class="sublabel">always present · no platform needed</text>
+      <text x="676" y="654" text-anchor="start" class="sublabel">DI singleton (Nest provider)</text>
+    </g>
+    <g class="badge"><circle cx="928" cy="578" r="9"/><text x="928" y="582" text-anchor="middle">1</text></g>
+
+    <g class="node">
+      <rect x="964" y="566" width="276" height="98" rx="8" fill="var(--panel2)" stroke="var(--cap)" stroke-width="1.3"/>
+      <text x="976" y="588" text-anchor="start" style="font-size:12px">Platform contracts «abstract»</text>
+      <text x="976" y="606" text-anchor="start" class="sublabel">MessageCapability</text>
+      <text x="976" y="622" text-anchor="start" class="sublabel">TypingCapability</text>
+      <text x="976" y="638" text-anchor="start" class="sublabel">ReadMessageCapability</text>
+      <text x="976" y="654" text-anchor="start" class="sublabel">own name · description · Zod schema</text>
+    </g>
+    <g class="badge"><circle cx="1228" cy="578" r="9"/><text x="1228" y="582" text-anchor="middle">2</text></g>
+
+    <g class="node">
+      <rect x="664" y="682" width="576" height="76" rx="8" fill="var(--panel2)" stroke="var(--ext)" stroke-width="1.3"/>
+      <text x="676" y="704" text-anchor="start" style="font-size:12px">Telegram implementations</text>
+      <text x="676" y="722" text-anchor="start" class="sublabel">TelegramMessageCapability · TelegramTypingCapability</text>
+      <text x="676" y="738" text-anchor="start" class="sublabel">TelegramReadMessagesCapability</text>
+      <text x="676" y="752" text-anchor="start" class="sublabel">hold TelegramClient · perform the real I/O</text>
+    </g>
+
+    <!-- Entities -->
+    <g class="node">
+      <rect x="44" y="852" width="170" height="48" rx="9" fill="var(--panel)" stroke="var(--entity)" stroke-width="1.5"/>
+      <text x="129" y="872" text-anchor="middle">PersonaService</text>
+      <text x="129" y="888" text-anchor="middle" class="sublabel">getListOfPersonas()</text>
+    </g>
+    <g class="node">
+      <rect x="236" y="852" width="170" height="48" rx="9" fill="var(--panel)" stroke="var(--core)" stroke-width="1.4"/>
+      <text x="321" y="872" text-anchor="middle">PersonaContext</text>
+      <text x="321" y="888" text-anchor="middle" class="sublabel">readonly · clone</text>
+    </g>
+    <g class="node">
+      <rect x="428" y="852" width="180" height="48" rx="9" fill="var(--panel)" stroke="var(--core)" stroke-width="1.4"/>
+      <text x="518" y="869" text-anchor="middle" style="font-size:12px">RuntimeContext</text>
+      <text x="518" y="884" text-anchor="middle" class="sublabel">account+persona+platform</text>
+    </g>
+    <g class="node">
+      <rect x="44" y="936" width="170" height="46" rx="9" fill="var(--panel)" stroke="var(--entity)" stroke-width="1.5"/>
+      <text x="129" y="956" text-anchor="middle">PersonaEntity</text>
+      <text x="129" y="971" text-anchor="middle" class="sublabel">1 ── N accounts</text>
+    </g>
+    <g class="node">
+      <rect x="236" y="936" width="170" height="46" rx="9" fill="var(--panel)" stroke="var(--entity)" stroke-width="1.5"/>
+      <text x="321" y="956" text-anchor="middle">AccountEntity</text>
+      <text x="321" y="971" text-anchor="middle" class="sublabel">platform · creds jsonb</text>
+    </g>
+
+    <!-- Persistence -->
+    <g class="node">
+      <rect x="684" y="852" width="300" height="48" rx="9" fill="var(--panel)" stroke="var(--data)" stroke-width="1.5"/>
+      <text x="834" y="872" text-anchor="middle">DatabaseModule</text>
+      <text x="834" y="888" text-anchor="middle" class="sublabel">TypeORM · forRootAsync · sync:true</text>
+    </g>
+    <g class="node">
+      <rect x="684" y="936" width="300" height="46" rx="9" fill="var(--panel)" stroke="var(--data)" stroke-width="1.5"/>
+      <text x="834" y="956" text-anchor="middle">PostgreSQL</text>
+      <text x="834" y="971" text-anchor="middle" class="sublabel">db: entity-core</text>
+    </g>
+  </svg>
+  </div>
+
+  <p class="notes">
+    <b>The action layer is gone.</b> Previously an <code>Action</code> carried the model-facing schema and a
+    <code>resolve()</code> that did nothing but delegate to a capability — two parallel lists that had to be kept in sync
+    by hand. Now a <b>capability is the whole unit</b>: it declares its own <code>name</code>, <code>description</code>,
+    and Zod <code>schema</code>, and it executes itself. There is exactly one list, so nothing can drift out of sync.
+  </p>
+
+  <h2 class="notes" style="margin-top:20px">The loop</h2>
+  <ol class="notes">
+    <li><b>Perceive (green).</b> <code>TelegramRuntime</code> emits an <code>IncomingMessagePlatformEvent</code> on its
+      RxJS <code>$events</code> subject. <b>RuntimeOrchestrator</b> subscribes and forwards to
+      <b>PlatformEventHandlerService</b>, which routes by <code>instanceof</code> to <b>IncomingMessagePipeline</b>.</li>
+    <li><b>Decide (purple).</b> <b>SendMessagePlannerService</b> builds the vocabulary — the runtime's capabilities plus
+      the app registry's — converts each Zod schema with <code>z.toJSONSchema()</code>, and hands Gemini an
+      <code>anyOf</code> array as the response schema. The model returns an ordered <code>IPlan[]</code>.</li>
+    <li><b>Act (orange).</b> <b>PlaneResolverService</b> rebuilds the same vocabulary, matches each plan item by
+      <code>name</code>, and calls <code>execute()</code>. The Telegram capability holds the client and performs the
+      real I/O — that's the outbound arrow back into the runtime.</li>
+  </ol>
+
+  <h2 class="notes">Why this shape works</h2>
+  <ul class="notes">
+    <li><b>One vocabulary, two sources.</b> Platform capabilities come from the connected runtime and therefore vary by
+      platform; app capabilities come from a DI singleton and are always available. The planner and the resolver derive
+      the union rather than declaring it, so the model can never be offered something the runtime can't do.</li>
+    <li><b>The <code>execute(args, input)</code> split.</b> <code>args</code> is injected by the runtime (the
+      <code>ConversationRef</code>); <code>input</code> is what the model filled in against the schema. That boundary is
+      what the old action's <code>resolve()</code> was doing by hand.</li>
+    <li><b>Contract vs. implementation.</b> The abstract capability owns the model-facing contract — name, prompt text,
+      schema — while the Telegram subclass owns only the SDK call. A second platform is one file per capability, and the
+      model's vocabulary stays identical across platforms.</li>
+    <li><b>Adding an ability</b> is now: enum entry, abstract contract, one impl per supporting platform. The runtime's
+      wiring is untouched — <code>ReadMessageCapability</code> was added exactly this way.</li>
+  </ul>
+
+  <div class="gaps">
+    <h2 class="notes" style="margin-top:0">Known gaps <span style="font-weight:400;color:var(--muted)">— marked on the diagram</span></h2>
+    <ul class="notes" style="margin-top:8px">
+      <li><span class="pill">1</span><b><code>AppDelayCapability.execute()</code> is empty.</b> The body is <code>{}</code>,
+        so the persona never actually pauses. <code>DelayAction</code> used to call <code>delay(ms)</code> — this is a
+        regression from the refactor.</li>
+      <li><span class="pill">2</span><b><code>ReadMessageCapability.execute()</code> is a concrete no-op</b> rather than
+        <code>abstract</code>. Telegram overrides it, but any future platform that forgets gets silent success.</li>
+      <li><span class="pill">3</span><b>The plan is never validated.</b> Zod schemas are used only to generate the prompt's
+        JSON Schema; nothing calls <code>.parse()</code> on Gemini's reply. <code>JSON.parse(response.text || '')</code>
+        also throws on an empty response.</li>
+      <li><span class="pill">4</span><b>Unknown names are silently skipped.</b> <code>capability?.execute(...)</code> — a
+        hallucinated name produces no error and no log. The <code>conversation</code> guard the old actions had is also
+        gone, so a missing conversation is a <code>TypeError</code> instead of a clear failure.</li>
+    </ul>
+    <p class="notes" style="margin-top:10px">
+      Root cause of 3 and 4 is the same: <code>Capability&lt;T = unknown, S = unknown&gt;</code> leaves both generics
+      unconstrained, so the resolver's dispatch site has no type safety at all. Constraining
+      <code>S extends ZodType</code> and parsing the plan with a <code>z.discriminatedUnion('name', …)</code> closes both.
+    </p>
+  </div>
+</div>
+</body>
+</html>
