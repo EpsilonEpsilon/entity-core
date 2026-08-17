@@ -244,7 +244,7 @@ export class ConversationRef {
 ```
 
 ```ts
-// telegram-runtime.ts — construct from a stable id
+// telegram-runtime.ts — construct from a stable ref
 new ConversationRef(PlatformType.telegram, event.message.chatId!.toString())
 ```
 
@@ -861,26 +861,27 @@ The entire architecture is built to support a rich persona; the data model doesn
 Add the missing domain model:
 
 ```ts
+
 @Entity('conversations')
 export class ConversationEntity {
-  @PrimaryGeneratedColumn('uuid') id: string;
-  @Column({ type: 'enum', enum: PlatformType }) platform: PlatformType;
-  @Column() externalId: string;              // matches ConversationRef.externalId
-  @ManyToOne(() => AccountEntity) account: AccountEntity;
-  @OneToMany(() => MessageEntity, (m) => m.conversation) messages: MessageEntity[];
-  @Index() @Column() lastActivityAt: Date;
+    @PrimaryGeneratedColumn('uuid') id: string;
+    @Column({type: 'enum', enum: PlatformType}) platform: PlatformType;
+    @Column() externalId: string;              // matches ConversationRef.externalId
+    @ManyToOne(() => AccountEntity) account: AccountEntity;
+    @OneToMany(() => MessagesEntity, (m) => m.conversation) messages: MessagesEntity[];
+    @Index() @Column() lastActivityAt: Date;
 }
 
 @Entity('messages')
-export class MessageEntity {
-  @PrimaryGeneratedColumn('uuid') id: string;
-  @ManyToOne(() => ConversationEntity, (c) => c.messages, { onDelete: 'CASCADE' })
-  conversation: ConversationEntity;
-  @Column({ type: 'enum', enum: MessageDirection }) direction: MessageDirection;
-  @Column('text') body: string;
-  @Column({ nullable: true }) externalSenderId: string | null;
-  @Column({ nullable: true }) externalMessageId: string | null;
-  @CreateDateColumn() createdAt: Date;
+export class MessagesEntity {
+    @PrimaryGeneratedColumn('uuid') id: string;
+    @ManyToOne(() => ConversationEntity, (c) => c.messages, {onDelete: 'CASCADE'})
+    conversation: ConversationEntity;
+    @Column({type: 'enum', enum: MessageDirection}) direction: MessageDirection;
+    @Column('text') body: string;
+    @Column({nullable: true}) externalSenderId: string | null;
+    @Column({nullable: true}) externalMessageId: string | null;
+    @CreateDateColumn() createdAt: Date;
 }
 ```
 
@@ -898,9 +899,9 @@ Then widen the planner's input so it receives history rather than one string:
 
 ```ts
 interface ConversationPlannerRequest {
-  conversation: ConversationRef;
-  incoming: MessageEntity;
-  history: MessageEntity[];       // last N, oldest first
+    conversation: ConversationRef;
+    incoming: MessagesEntity;
+    history: MessagesEntity[];       // last N, oldest first
 }
 ```
 

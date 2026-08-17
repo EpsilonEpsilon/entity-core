@@ -17,7 +17,7 @@ class TelegramReadMessagesCapability extends ReadMessageCapability<Args> {
   async execute(args: Args, _input: ReadMessageCapabilityType): Promise<void> {
     await this.client.invoke(
       new Api.messages.ReadHistory({
-        peer: args.conversation.id as EntityLike,
+        peer: args.conversation.ref as EntityLike,
         maxId: 0,
       }),
     );

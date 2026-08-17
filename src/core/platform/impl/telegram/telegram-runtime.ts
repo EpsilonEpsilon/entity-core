@@ -4,11 +4,11 @@ import {
 } from '../../platformRuntime';
 import { Injectable, Logger } from '@nestjs/common';
 import { TelegramCredentials } from '../../../../entities/account/types';
-import { TelegramClient } from 'telegram';
+import { Api, TelegramClient } from 'telegram';
 import { StringSession } from 'telegram/sessions';
 import { NewMessage, NewMessageEvent } from 'telegram/events';
 import { TelegramMessageCapability } from './capabilities/telegram-message-capability';
-import { IncomingMessagePlatformEvent } from '../../events/IncomingMessagePlatformEvent';
+import { IncomingMessagePlatformEvent } from '../../events/new-message/IncomingMessagePlatformEvent';
 import { PlatformType } from '../../platform.enum';
 import { ConversationRef } from '../../common/ConversationRef';
 import { Subject } from 'rxjs';
@@ -16,6 +16,9 @@ import { PlatformEvent } from '../../events/PlatformEvent';
 
 import { TelegramTypingCapability } from './capabilities/telegram-typing-capability';
 import TelegramReadMessagesCapability from './capabilities/telegram-read-messages-capability';
+import { mapTelegramChat } from './utils';
+import { OutgoingMessagePlatformEvent } from '../../events/new-message/OutgoingMessagePlatformEvent';
+import Message = Api.Message;
 
 @Injectable()
 export class TelegramRuntime extends PlatformRuntime {
@@ -53,6 +56,8 @@ export class TelegramRuntime extends PlatformRuntime {
       this.connectionState = PlatformRuntimeConnectionState.Connected;
 
       this.initCapabilities(this.client);
+      await this.initPlatformSender();
+      this.registerCapabilitiesListeners();
       this.logger.log(
         `Successfully connected to Telegram Platform. Api hash: ${credentials.api_hash.slice(0, 5)}`,
       );
@@ -63,6 +68,19 @@ export class TelegramRuntime extends PlatformRuntime {
     }
   }
 
+  private async initPlatformSender() {
+    const me = await this.client.getMe();
+
+    this.sender = {
+      platformId: me.id.toString(),
+      firstName: me.firstName,
+      platform: PlatformType.telegram,
+      accessHash: me.accessHash?.toString(),
+      lastName: me.lastName,
+      username: me.username,
+    };
+  }
+
   private registerListeners() {
     this.client.addEventHandler(
       this.handleIncomingMessageEvent.bind(this),
@@ -70,11 +88,68 @@ export class TelegramRuntime extends PlatformRuntime {
     );
   }
 
+  private registerCapabilitiesListeners() {
+    this.capabilities
+      .find((capability) => capability instanceof TelegramMessageCapability)
+      ?.messageSubject.subscribe((message) =>
+        this.handleOutgoingMessage(message),
+      );
+  }
+
+  private async createConversationRefFromMessage(
+    message: Message,
+    platformSender?: Api.User,
+  ) {
+    const sender = platformSender || (await message.getSender());
+
+    const chat = await message.getInputChat();
+    if (!(sender instanceof Api.User)) throw new Error('Missing user entity');
+    if (!chat) throw new Error('Missing chat information');
+    const chatInformation = mapTelegramChat(chat);
+
+    return new ConversationRef(chat, {
+      sender: {
+        username: sender.username,
+        platform: PlatformType.telegram,
+        accessHash: sender.accessHash?.toString(),
+        firstName: sender.firstName,
+        lastName: sender.lastName,
+        platformId: sender.id.toString(),
+      },
+      chat: {
+        type: chatInformation.type,
+        title: chatInformation.title,
+        platform: PlatformType.telegram,
+        platformChatId: chatInformation.platformChatId,
+        accessHash: chatInformation.meta.accessHash,
+      },
+    });
+  }
+
+  private async handleOutgoingMessage(message: Message) {
+    const conversationRef = await this.createConversationRefFromMessage(
+      message,
+      await this.client.getMe(),
+    );
+    const platformEvent = new OutgoingMessagePlatformEvent(
+      PlatformType.telegram,
+      message.id,
+      conversationRef,
+      message.message,
+      message.senderId?.toString(),
+    );
+
+    this.events.next(platformEvent);
+  }
+
   private async handleIncomingMessageEvent(event: NewMessageEvent) {
+    const conversationRef = await this.createConversationRefFromMessage(
+      event.message,
+    );
     const platformEvent = new IncomingMessagePlatformEvent(
       PlatformType.telegram,
       event.message.id,
-      new ConversationRef(await event.message.getInputChat()),
+      conversationRef,
       event.message.message,
       event.message.senderId?.toString(),
     );

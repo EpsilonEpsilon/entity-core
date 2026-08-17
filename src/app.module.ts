@@ -4,6 +4,9 @@ import { configuration } from './config/configuration';
 import { ConfigModule } from '@nestjs/config';
 import { DatabaseModule } from './common/database/databse.module';
 import { AccountModule } from './entities/account/account.module';
+import { ParticipantModule } from './entities/participant/participant.module';
+import ChatModule from './entities/chat/chat.module';
+import { MessagesModule } from './entities/messages/messages.module';
 
 @Module({
   imports: [
@@ -11,6 +14,9 @@ import { AccountModule } from './entities/account/account.module';
     DatabaseModule,
     AppBootstrapModule,
     AccountModule,
+    ParticipantModule,
+    ChatModule,
+    MessagesModule,
   ],
 })
 export class AppModule {}

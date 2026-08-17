@@ -20,7 +20,8 @@ export abstract class ReadMessageCapability<T> implements Capability<
     ReadMessageCapability is the interface responsible for reading all messages in the chat.
     If this capability available you should always exec it before doing other actions in the chat room
   `;
-  execute(args: unknown, input: ReadMessageCapabilityType): Promise<void> {
-    return Promise.resolve(undefined);
-  }
+  abstract execute(
+    args: unknown,
+    input: ReadMessageCapabilityType,
+  ): Promise<void>;
 }

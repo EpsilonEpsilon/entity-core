@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { IncomingMessageReactionPlannerService } from './planners/incoming-message-reaction-planner.service';
-import { GeminiModule } from '../../ai/gemini/Gemini.module';
+import { GeminiModule } from '../../common/gemini/Gemini.module';
 import { PlaneResolverService } from './plan-resolver.service';
 import AppCapabilitiesModule from '../app-capabilities/app-capabilities.module';
 import { PromptBuilderModule } from '../prompt-builder/prompt-builder.module';

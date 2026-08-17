@@ -1,6 +1,6 @@
 import { PlannerInterface } from '../planner.abstract';
 import RuntimeContext from '../../runtime-context-builder/runtime-context';
-import GeminiService from '../../../ai/gemini/gemini.service';
+import GeminiService from '../../../common/gemini/gemini.service';
 import { Injectable } from '@nestjs/common';
 import { z, ZodType } from 'zod';
 import AppCapabilitiesRegistryService from '../../app-capabilities/app-capabilities-registry.service';

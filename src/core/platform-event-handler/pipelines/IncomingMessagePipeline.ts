@@ -1,7 +1,7 @@
 import { PipelineAbstract } from './pipeline-abstract';
 import RuntimeContext from '../../runtime-context-builder/runtime-context';
 import { PlatformEvent } from '../../platform/events/PlatformEvent';
-import { IncomingMessagePlatformEvent } from '../../platform/events/IncomingMessagePlatformEvent';
+import { IncomingMessagePlatformEvent } from '../../platform/events/new-message/IncomingMessagePlatformEvent';
 import { Injectable, Logger } from '@nestjs/common';
 import { MessageCapability } from '../../../common/capability/capabilities/message-capability';
 import { IncomingMessageReactionPlannerService } from '../../planner/planners/incoming-message-reaction-planner.service';

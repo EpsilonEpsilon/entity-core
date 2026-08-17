@@ -18,7 +18,7 @@ export class TelegramTypingCapability extends TypingCapability<Params> {
   async execute(args: Params, input: TypingCapabilitySchemaType) {
     await this.client.invoke(
       new Api.messages.SetTyping({
-        peer: args.conversation.id as EntityLike,
+        peer: args.conversation.ref as EntityLike,
         action: new Api.SendMessageTypingAction(),
       }),
     );
