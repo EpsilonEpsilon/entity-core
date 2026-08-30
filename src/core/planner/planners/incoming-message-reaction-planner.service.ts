@@ -5,6 +5,8 @@ import { Injectable } from '@nestjs/common';
 import { z, ZodType } from 'zod';
 import AppCapabilitiesRegistryService from '../../app-capabilities/app-capabilities-registry.service';
 import { IncomingMessageReactionPromptBuilderService } from '../../prompt-builder/incoming-message-reaction-prompt-builder.service';
+import { IPlan } from '../planner';
+import { Capability } from '../../../common/capability/capability';
 
 interface ISendMessagePlannerContext {
   receivedMessage: string;
@@ -23,9 +25,9 @@ export class IncomingMessageReactionPlannerService implements PlannerInterface<I
     const capabilities = [
       ...context.platform.getAllCapabilities(),
       ...this.appCapabilitiesRegistry.getRegistry(),
-    ];
+    ] as Capability[];
     const capabilitySchemas = capabilities.map((capability) => {
-      const schema = z.toJSONSchema(capability.schema as ZodType, {
+      const schema = z.toJSONSchema(capability.schema as unknown as ZodType, {
         target: 'draft-07',
       }) as Record<string, unknown>;
 

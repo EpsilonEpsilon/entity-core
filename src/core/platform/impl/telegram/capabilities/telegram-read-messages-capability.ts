@@ -3,7 +3,7 @@ import {
   ReadMessageCapabilityType,
 } from '../../../../../common/capability/capabilities/read-meassage-capability';
 import { Api, TelegramClient } from 'telegram';
-import { ConversationRef } from '../../../common/ConversationRef';
+import { ConversationRef } from '../../../common/conversation-ref';
 import { EntityLike } from 'telegram/define';
 
 interface Args {

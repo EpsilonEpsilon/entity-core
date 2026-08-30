@@ -2,6 +2,7 @@ import { PlatformType } from '../../platform.enum';
 import { ChatType } from '../../../../entities/chat/chat.entity';
 
 export interface TelegramSender {
+  id: string;
   platformId: string;
   platform: PlatformType.telegram;
   accessHash?: string;
@@ -11,6 +12,7 @@ export interface TelegramSender {
 }
 
 export interface ITelegramChat {
+  id: string;
   platformChatId: string;
   platform: PlatformType.telegram;
   accessHash?: string;

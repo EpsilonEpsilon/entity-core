@@ -9,34 +9,18 @@ import { ChatService } from '../../../entities/chat/chat.service';
 
 @Injectable()
 export class NewMessagePipeline implements PipelineAbstract<NewPlatformMessage> {
-  constructor(
-    private readonly messageHistoryService: MessageHistoryService,
-    private readonly participantService: ParticipantService,
-    private readonly chatService: ChatService,
-  ) {}
+  constructor(private readonly messageHistoryService: MessageHistoryService) {}
   async process(context: RuntimeContext, event: NewPlatformMessage) {
-    const platformChatId = event.conversation.meta?.chat.platformChatId;
-    const platformId = event.conversation.meta?.sender.platformId;
-
-    if (!platformId) throw new Error('Participant platformId is missing');
-    if (!platformChatId)
-      throw new Error('MessagePlatformEvent Conversation ref missing chat');
     if (!event.message_id)
       throw new Error('MessagePlatform Event Message platformId is missing');
-    if (!event.conversation.meta?.sender.platformId)
-      throw new Error('MessagePlatform Event sender platformId is missing');
-    const participant =
-      await this.participantService.findParticipantByPlatformId(platformId);
-
-    const chat =
-      await this.chatService.findChatByPlatformChatId(platformChatId);
-    if (!participant || !chat)
-      throw new Error('Participant or Chat Entities are missing');
-
+    if (!event.conversation.meta?.chat.id)
+      throw new Error('Conversation meta chat id is missing');
+    if (!event.conversation.meta?.sender.id)
+      throw new Error('Conversation ref sender id is missing');
     void this.messageHistoryService.createMessageHistoryRecord(event.message, {
       messageId: event.message_id.toString(),
-      chatId: chat.id,
-      participantId: participant.id,
+      chatId: event.conversation.meta?.chat.id,
+      participantId: event.conversation.meta?.sender.id,
     });
   }
 }

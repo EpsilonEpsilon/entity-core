@@ -2,7 +2,7 @@ import {
   PlatformRuntime,
   PlatformRuntimeConnectionState,
 } from '../../platformRuntime';
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { TelegramCredentials } from '../../../../entities/account/types';
 import { Api, TelegramClient } from 'telegram';
 import { StringSession } from 'telegram/sessions';
@@ -10,14 +10,14 @@ import { NewMessage, NewMessageEvent } from 'telegram/events';
 import { TelegramMessageCapability } from './capabilities/telegram-message-capability';
 import { IncomingMessagePlatformEvent } from '../../events/new-message/IncomingMessagePlatformEvent';
 import { PlatformType } from '../../platform.enum';
-import { ConversationRef } from '../../common/ConversationRef';
 import { Subject } from 'rxjs';
-import { PlatformEvent } from '../../events/PlatformEvent';
+import { PlatformEvent } from '../../events/platform-event';
 
 import { TelegramTypingCapability } from './capabilities/telegram-typing-capability';
 import TelegramReadMessagesCapability from './capabilities/telegram-read-messages-capability';
 import { mapTelegramChat } from './utils';
 import { OutgoingMessagePlatformEvent } from '../../events/new-message/OutgoingMessagePlatformEvent';
+import ConversationFactoryService from '../../common/conversation-factory-service.service';
 import Message = Api.Message;
 
 @Injectable()
@@ -27,6 +27,9 @@ export class TelegramRuntime extends PlatformRuntime {
   private readonly logger = new Logger(TelegramRuntime.name);
   private client: TelegramClient;
   public connectionState = PlatformRuntimeConnectionState.Idle;
+
+  @Inject(ConversationFactoryService)
+  private conversationFactoryService: ConversationFactoryService;
 
   public capabilities: [
     TelegramMessageCapability,
@@ -107,7 +110,7 @@ export class TelegramRuntime extends PlatformRuntime {
     if (!chat) throw new Error('Missing chat information');
     const chatInformation = mapTelegramChat(chat);
 
-    return new ConversationRef(chat, {
+    return this.conversationFactoryService.createRef(chat, {
       sender: {
         username: sender.username,
         platform: PlatformType.telegram,
@@ -137,6 +140,7 @@ export class TelegramRuntime extends PlatformRuntime {
       conversationRef,
       message.message,
       message.senderId?.toString(),
+      conversationRef.meta?.chat.id,
     );
 
     this.events.next(platformEvent);
@@ -152,6 +156,7 @@ export class TelegramRuntime extends PlatformRuntime {
       conversationRef,
       event.message.message,
       event.message.senderId?.toString(),
+      conversationRef.meta?.chat.id,
     );
 
     this.events.next(platformEvent);

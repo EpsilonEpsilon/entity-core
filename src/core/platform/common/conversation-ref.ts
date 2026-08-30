@@ -1,14 +1,14 @@
 import { EntityLike } from 'telegram/define';
 import { IPlatformChat, IPlatformSender } from '../types';
 
-interface IConversationMeta {
+export interface IConversationMeta {
   sender: IPlatformSender;
   chat: IPlatformChat;
 }
 
-type TelegramConversationRef = EntityLike;
+export type TelegramConversationRef = EntityLike;
 
-type IConversationRef = TelegramConversationRef;
+export type IConversationRef = TelegramConversationRef;
 
 export class ConversationRef {
   constructor(

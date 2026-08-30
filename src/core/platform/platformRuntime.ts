@@ -1,7 +1,7 @@
 import { AccountCredentials } from '../../entities/account/types';
 import { Capability } from '../../common/capability/capability';
 import { Observable } from 'rxjs';
-import { PlatformEvent } from './events/PlatformEvent';
+import { PlatformEvent } from './events/platform-event';
 import { AbstractType } from '../../types';
 import { IPlatformSender } from './types';
 
@@ -18,7 +18,7 @@ export abstract class PlatformRuntime {
   abstract init(credentials: AccountCredentials): Promise<void>;
   public abstract connectionState: PlatformRuntimeConnectionState;
   protected abstract capabilities: Capability[];
-  public sender?: IPlatformSender;
+  public sender?: Omit<IPlatformSender, 'id'>;
   public get<T extends Capability>(capability: AbstractType<T>): T | undefined {
     return this.capabilities.find(
       (platformCapability) => platformCapability instanceof capability,

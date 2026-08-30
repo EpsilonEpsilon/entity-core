@@ -3,7 +3,7 @@ import {
   TypingCapabilitySchemaType,
 } from '../../../../../common/capability/capabilities/typing-capability';
 import { Api, TelegramClient } from 'telegram';
-import { ConversationRef } from '../../../common/ConversationRef';
+import { ConversationRef } from '../../../common/conversation-ref';
 import { EntityLike } from 'telegram/define';
 import { delay } from '../../../../../utils';
 

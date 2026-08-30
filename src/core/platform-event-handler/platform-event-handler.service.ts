@@ -1,24 +1,37 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import RuntimeContext from '../runtime-context-builder/runtime-context';
-import { PlatformEvent } from '../platform/events/PlatformEvent';
+import { PlatformEvent } from '../platform/events/platform-event';
 import { PipelineAbstract } from './pipelines/pipeline-abstract';
-import { MessageCapability } from '../../common/capability/capabilities/message-capability';
 import { IncomingMessagePlatformEvent } from '../platform/events/new-message/IncomingMessagePlatformEvent';
-import IncomingMessagePipeline from './pipelines/IncomingMessagePipeline';
-import { NewPlatformMessage } from '../platform/events/new-message/NewPlatformMessage';
-import { NewMessagePipeline } from './pipelines/NewMessagePipeline';
+import IncomingMessagePipeline from './pipelines/incoming-message-pipeline';
+import { EventBuffer } from '../platform/events/event-buffer';
 
 @Injectable()
 export class PlatformEventHandlerService implements PipelineAbstract {
-  constructor(
-    private incomingMessagePipeline: IncomingMessagePipeline,
-    private newMessagePipeline: NewMessagePipeline,
-  ) {}
-  process(context: RuntimeContext, event: PlatformEvent) {
-    if (event instanceof NewPlatformMessage)
-      void this.newMessagePipeline.process(context, event);
+  private logger = new Logger(PlatformEventHandlerService.name);
+  constructor(private incomingMessagePipeline: IncomingMessagePipeline) {}
+  process(context: RuntimeContext, input: PlatformEvent | EventBuffer) {
+    if (input instanceof EventBuffer) {
+      this.logger.log(`Start processing event buffer of ${input.size}`);
+    }
 
-    if (event instanceof IncomingMessagePlatformEvent)
-      void this.incomingMessagePipeline.process(context, event);
+    if (this.isIncomingMessageInput(input)) {
+      void this.incomingMessagePipeline.process(context, input);
+    }
+  }
+
+  isIncomingMessageEvent = (
+    event: PlatformEvent,
+  ): event is IncomingMessagePlatformEvent =>
+    event instanceof IncomingMessagePlatformEvent;
+
+  private isIncomingMessageInput(
+    input: PlatformEvent | EventBuffer,
+  ): input is
+    IncomingMessagePlatformEvent | EventBuffer<IncomingMessagePlatformEvent> {
+    return (
+      input instanceof IncomingMessagePlatformEvent ||
+      (input instanceof EventBuffer && input.every(this.isIncomingMessageEvent))
+    );
   }
 }

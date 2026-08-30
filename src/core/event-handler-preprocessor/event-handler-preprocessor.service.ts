@@ -1,11 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import RuntimeContext from '../runtime-context-builder/runtime-context';
-import { PlatformEvent } from '../platform/events/PlatformEvent';
+import { PlatformEvent } from '../platform/events/platform-event';
 import { ParticipantService } from '../../entities/participant/participant.service';
 import { IncomingMessagePlatformEvent } from '../platform/events/new-message/IncomingMessagePlatformEvent';
-import { ConversationRef } from '../platform/common/ConversationRef';
+import { ConversationRef } from '../platform/common/conversation-ref';
 import { ChatService } from '../../entities/chat/chat.service';
 import { NewPlatformMessage } from '../platform/events/new-message/NewPlatformMessage';
+import { NewMessagePipeline } from '../platform-event-handler/pipelines/new-message-pipeline';
+import { EventBuffer } from '../platform/events/event-buffer';
+import runtimeContext from '../runtime-context-builder/runtime-context';
 
 @Injectable()
 class EventHandlerPreprocessorService {
@@ -13,8 +16,20 @@ class EventHandlerPreprocessorService {
   constructor(
     private participantService: ParticipantService,
     private chatService: ChatService,
+    private newMessagePipeline: NewMessagePipeline,
   ) {}
-  async process(context: RuntimeContext, event: PlatformEvent) {
+  async process(context: RuntimeContext, input: PlatformEvent | EventBuffer) {
+    if (input instanceof EventBuffer) {
+      return await Promise.allSettled(
+        input.events.map(async (event) => this.processEvent(context, event)),
+      );
+    }
+    return this.processEvent(context, input);
+  }
+
+  private async processEvent(context: RuntimeContext, event: PlatformEvent) {
+    if (event instanceof NewPlatformMessage)
+      await this.newMessagePipeline.process(context, event);
     if (event instanceof NewPlatformMessage) {
       await this.processParticipant(event.conversation, context);
     }
@@ -49,8 +64,6 @@ class EventHandlerPreprocessorService {
       title: conversation.meta.chat.title,
       meta: { accessHash: conversation.meta.chat.accessHash },
     });
-
-    this.logger.log('Created new participant');
   }
 }
 

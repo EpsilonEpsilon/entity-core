@@ -4,9 +4,9 @@ import {
 } from '../../../../../common/capability/capabilities/message-capability';
 import { Api, TelegramClient } from 'telegram';
 import { EntityLike } from 'telegram/define';
-import { ConversationRef } from '../../../common/ConversationRef';
+import { ConversationRef } from '../../../common/conversation-ref';
 import { Subject } from 'rxjs';
-import { PlatformEvent } from '../../../events/PlatformEvent';
+import { PlatformEvent } from '../../../events/platform-event';
 import { PlatformType } from '../../../platform.enum';
 import { OutgoingMessagePlatformEvent } from '../../../events/new-message/OutgoingMessagePlatformEvent';
 import Message = Api.Message;

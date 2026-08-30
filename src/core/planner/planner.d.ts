@@ -1,4 +1,6 @@
-interface IPlan {
-  name: string;
-  [key: string]: string | number;
+import { CapabilityEnum } from '../../common/capability/capabilities.enum';
+
+export interface IPlan {
+  name: CapabilityEnum;
+  [key: string]: unknown;
 }

@@ -33,4 +33,14 @@ export class MessagesService {
 
     return this.messageRepository.save(entity);
   }
+
+  async getLastMessages(
+    amount: number,
+    params: { authorId: string; chatId: string },
+  ) {
+    return this.messageRepository.find({
+      where: { author: { id: params.authorId }, chat: { id: params.chatId } },
+      take: amount,
+    });
+  }
 }

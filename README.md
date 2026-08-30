@@ -1,98 +1,135 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# entity-core
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Сервис, который запускает AI-персон в мессенджерах. Одна персона может иметь несколько аккаунтов на разных платформах; на каждый аккаунт поднимается свой runtime. Входящее сообщение → планировщик (Gemini) выбирает набор действий → резолвер их выполняет.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+Учебный проект. Часть проблем ниже отложена осознанно — см. [Бэклог](#бэклог).
 
-## Description
+## Как это работает
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Project setup
-
-```bash
-$ yarn install
+```
+TelegramRuntime ──$events──▶ Preprocessor ──▶ EventHandler ──┬──▶ NewMessagePipeline ──▶ история
+                                                              └──▶ IncomingMessagePipeline
+                                                                        │
+                                                          Planner ──▶ Gemini ──▶ IPlan[]
+                                                                        │
+                                                                   PlanResolver
+                                                                        │
+                                                                   Capability.execute()
+                                                                        │
+                                                          (исходящее сообщение → снова в $events)
 ```
 
-## Compile and run the project
+**Capability** — единственный словарь системы. Один класс несёт и контракт для модели (`name`, `description`, Zod-`schema`), и исполнение (`execute(args, input)`), где `args` подставляет runtime, а `input` заполняет модель. Абстрактный класс держит контракт, платформенный наследник — вызов SDK.
 
-```bash
-# development
-$ yarn run start
+Словарь собирается как объединение двух источников:
 
-# watch mode
-$ yarn run start:dev
-
-# production mode
-$ yarn run start:prod
+```ts
+[...platform.getAllCapabilities(), ...appCapabilitiesRegistry.getRegistry()]
 ```
 
-## Run tests
+Платформенные приходят из подключённого runtime и зависят от платформы, приложенческие (`AppDelayCapability`) есть всегда. Планировщик и резолвер оба *выводят* это объединение, а не объявляют — поэтому модели нельзя предложить то, чего runtime не умеет.
+
+Подробная схема со всеми связями: [architecture.html](architecture.html) — открыть в браузере.
+
+## Стек
+
+NestJS · TypeORM + PostgreSQL · RxJS · Zod · `@google/genai` (Gemini) · gramJS (`telegram`)
+
+## Запуск
 
 ```bash
-# unit tests
-$ yarn run test
-
-# e2e tests
-$ yarn run test:e2e
-
-# test coverage
-$ yarn run test:cov
+yarn install
 ```
 
-## Deployment
+`.env` в корне:
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+```
+DATABASE_HOST=localhost
+DATABASE_PORT=5432
+DATABASE_USERNAME=postgres
+DATABASE_PASSWORD=postgres
+GEMINI_API_KEY=
+TELEGRAM_APP_ID=
+TELEGRAM_API_HASH=
+```
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+База `entity-core` должна существовать; схема создаётся сама (`synchronize: true`).
 
 ```bash
-$ yarn install -g @nestjs/mau
-$ mau deploy
+yarn start:dev
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+Получить Telegram session string — [src/scripts/tg_connect.ts](src/scripts/tg_connect.ts) (сейчас `apiId`/`apiHash` в нём захардкожены пустыми, заполнить перед запуском). Полученную строку положить в `account.credentials`.
 
-## Resources
+---
 
-Check out a few resources that may come in handy when working with NestJS:
+# Бэклог
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+Порядок — по принципу «сначала то, что искажает обратную связь, потом то, что дорожает со временем». Внутри этапа задачи независимы.
 
-## Support
+## Этап 0 — баги, из-за которых система ведёт себя не так, как кажется
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+Самое дешёвое и самое важное для учебного проекта: пока это не починено, наблюдения за поведением персоны недостоверны.
 
-## Stay in touch
+- [ ] **`AppDelayCapability.execute()` пустой** — [app-delay-capability.ts:15](src/core/app-capabilities/capabilities/app-delay-capability.ts). Тело `{}`, паузы нет вообще. Добавить `await delay(input.delay)` (утилита уже есть в [utils.ts](src/utils.ts)). *~5 мин*
+- [ ] **`ReadMessageCapability.execute()` — конкретная заглушка** вместо `abstract` — [read-meassage-capability.ts:23](src/common/capability/capabilities/read-meassage-capability.ts). Telegram её переопределяет, но следующая платформа молча получит «успех», ничего не сделав. Сделать `abstract execute(...)`. *~5 мин*
+- [ ] **План модели не валидируется** — [incoming-message-reaction-planner.service.ts:52](src/core/planner/planners/incoming-message-reaction-planner.service.ts). Zod используется только для генерации JSON Schema; `.parse()` на ответе не вызывается, а `JSON.parse(response.text || '')` падает на пустом ответе. Собрать схему плана и распарсить ответ — заодно станет видно, где именно Gemini не соблюдает контракт. *~1 час*
+- [ ] **Неизвестные имена молча проглатываются** — [plan-resolver.service.ts:29](src/core/planner/plan-resolver.service.ts): `compatibility?.execute(...)`. Галлюцинация в `name` не даёт ни ошибки, ни лога. После предыдущего пункта заменить `?.` на явный throw. *~10 мин*
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+## Этап 1 — конкурентность и история (делать вместе)
 
-## License
+Сейчас каждое сообщение — независимый цикл. Три задачи, которые часто путают:
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+| | проблема | инструмент |
+|---|---|---|
+| порядок | сообщения одного чата обрабатываются вперемешку | `groupBy` + `concatMap` |
+| склейка | три сообщения подряд → три отдельных ответа | debounce перед планированием |
+| прерывание | сообщение пришло посреди исполнения плана | прерывание между шагами плана |
+
+- [ ] **Сериализация по диалогу** — [runtime-orchestrator.service.ts:15](src/core/runtime-orchestrator/runtime-orchestrator.service.ts). `mergeMap` → `groupBy(conversationKey)` + `concatMap`. Ключ группы должен быть стабильной строкой — сейчас в `ConversationRef` для этого годится `meta.chat.platformChatId`. Добавить duration-селектор, иначе группы копятся вечно. *~полдня*
+- [ ] **Планировщик читает историю вместо одного сообщения** — сейчас на входе `ISendMessagePlannerContext { receivedMessage: string }`. Заменить на чтение последних N записей из `messages` (они уже пишутся, сортировка по `createdAt ASC` уже есть). Это бесплатно решает склейку: несколько сообщений за окно — просто несколько строк в контексте. *~полдня*
+- [ ] **Ошибки пайплайнов теряются** — `void this.…Pipeline.process(...)` в [platform-event-handler.service.ts](src/core/platform-event-handler/platform-event-handler.service.ts). Любое исключение внутри исчезает. Ловить и логировать. *~20 мин*
+
+> ⚠️ При сериализации помнить: исходящие сообщения возвращаются в `$events` через `messageSubject`, то есть попадут в ту же очередь, что и входящее, которое их породило. Сейчас безопасно (`events.next()` синхронный, никто его не ждёт), но если когда-нибудь захочется дождаться записи исходящего внутри резолвера — получится дедлок на своей же очереди. Ветку «запись в историю» лучше держать вне очереди планирования.
+
+## Этап 2 — типы должны защищать дизайн
+
+- [ ] **Генерики `Capability` не ограничены** — [capability.ts:3](src/common/capability/capability.ts): `Capability<T = unknown, S = unknown>`. Из-за этого точка диспетчеризации в резолвере не типизирована вообще — туда компилируется `execute(42, {что угодно})`. Ограничить `S extends ZodType`, `execute(args: TArgs, input: z.infer<TSchema>)`. *~1 час*
+- [ ] **`anyOf` → `z.discriminatedUnion('name', …)`**, и удалить [planner.d.ts](src/core/planner/planner.d.ts). `IPlan` — глобальный ambient-тип (файл без импортов/экспортов), а его индексная сигнатура `string | number` не описывает вложенные объекты. Тип плана должен выводиться из схемы. *~1 час*
+- [ ] **`implements` vs `extends` вразнобой** — `MessageCapability` и `ReadMessageCapability` используют `implements Capability`, `TypingCapability` и `AppCapability` — `extends`. Значит `TelegramMessageCapability instanceof Capability === false`. Работает только потому, что `get()` проверяет конкретный подкласс. Привести к `extends` везде. *~10 мин*
+- [ ] **`strict: true`** в [tsconfig.json](tsconfig.json) (сейчас выключен вместе с `noImplicitAny`). Делать после предыдущих пунктов — большая часть ошибок отвалится сама. *~полдня*
+
+## Этап 3 — устойчивость
+
+- [ ] **Промисы в бутстрапе не ожидаются** — [app-bootstrap.service.ts:20](src/core/app-bootstrap/app-bootstrap.service.ts): `contexts.map(async …)` без `await`. Протухшая сессия или отсутствующий `platform.sender` → unhandled rejection, и непонятно, какие персоны вообще стартовали. `Promise.allSettled` + лог по каждой. *~30 мин*
+- [ ] **`capabilities` не инициализированы до `init()`** — [telegram-runtime.ts:31](src/core/platform/impl/telegram/telegram-runtime.ts). Любой вызов `getAllCapabilities()` до подключения даёт `undefined`. Инициализировать пустым массивом, добавить проверку состояния. *~20 мин*
+- [ ] **Нет жизненного цикла** — `PlatformRuntimeConnectionState` объявляет `Disconnecting`/`Disconnected`, но метода `disconnect()` нет, подписки не отписываются, `main.ts` не вызывает `enableShutdownHooks()`. *~2 часа*
+
+## Этап 4 — протечки слоёв
+
+Пока платформа одна — не болит. Заболит ровно в момент добавления второй.
+
+- [ ] **`ConversationRef` импортирует `EntityLike` из `telegram/define`** — [conversation-ref.ts:1](src/core/platform/common/conversation-ref.ts). Ядро напрямую знает про Telegram. `meta` уже платформенно-нейтральна, осталось поле `ref`.
+- [ ] **`IPlatformSender = TelegramSender`** — [types.ts:3](src/core/platform/types.ts). Сделать размеченным объединением по `platform`, как и `AccountCredentials`.
+- [ ] **`impl/telegram/types.ts` импортирует `ChatType` из entity** — [types.ts:2](src/core/platform/impl/telegram/types.ts). Платформенный слой смотрит в persistence; зависимость должна идти в другую сторону.
+- [ ] **Поиск игнорирует колонку `platform`** — `findParticipantByPlatformId` и `findChatByPlatformChatId` фильтруют только по id, при том что уникальные индексы составные. Для Telegram-only корректно, для второй платформы — нет.
+
+## Этап 5 — гигиена
+
+- [ ] Опечатки в именах: `databse.module.ts` → `database.module.ts`, `read-meassage-capability.ts` → `read-message-capability.ts`, `PlaneResolverService` → `PlanResolverService`. Переименовывать через `git mv` (`forceConsistentCasingInFileNames` включён, macOS регистронезависима).
+- [ ] Описание у `TypingCapability` начинается с «MessageCapability is the interface…» — копипаста, а текст уходит в промпт.
+- [ ] Мёртвый код: пустой `AccountService`, неиспользуемые импорты, `zod-to-json-schema` в зависимостях (используется встроенный `z.toJSONSchema`), захардкоженные пустые `apiId`/`apiHash` в `tg_connect.ts`.
+- [ ] Именование файлов: `platformRuntime.ts`, `conversation-ref.ts`, `new-message-pipeline.ts`, `Gemini.module.ts` — Nest-конвенция kebab-case.
+- [ ] Тесты на чистую логику: резолвер, матчинг капабилити, валидация плана, `mapTelegramChat`. Jest уже настроен, тестов ноль.
+
+## Этап 6 — прод (для учебного проекта можно отложить)
+
+- [ ] `synchronize: true` → миграции. Сейчас в базе уже есть история сообщений, которую жалко.
+- [ ] Валидация конфига — `zod` уже в зависимостях, `DATABASE_PORT` приходит строкой и читается как `number`.
+- [ ] Секреты: session string лежит в `jsonb` в открытом виде (это полный доступ к аккаунту), и [telegram-runtime.ts:62](src/core/platform/impl/telegram/telegram-runtime.ts) логирует начало `api_hash`.
+- [ ] Модель Gemini захардкожена в [gemini.service.ts:23](src/common/gemini/gemini.service.ts) — вынести в конфиг.
+- [ ] Блок `telegram` в [configuration.ts](src/config/configuration.ts) нигде не читается (креды берутся из таблицы `account`) — убрать или задействовать.
+
+---
+
+`ARCHITECTURE_REVIEW.md` описывает состояние до рефакторинга капабилити и устарел — актуальная картина в [architecture.html](architecture.html) и здесь.

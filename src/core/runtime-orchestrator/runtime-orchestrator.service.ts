@@ -1,8 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import RuntimeContext from '../runtime-context-builder/runtime-context';
 import { PlatformEventHandlerService } from '../platform-event-handler/platform-event-handler.service';
-import { mergeMap } from 'rxjs';
+import { buffer, debounceTime, filter, groupBy, map, mergeMap } from 'rxjs';
 import EventHandlerPreprocessorService from '../event-handler-preprocessor/event-handler-preprocessor.service';
+import { EventBuffer } from '../platform/events/event-buffer';
 
 @Injectable()
 export class RuntimeOrchestratorService {
@@ -14,14 +15,25 @@ export class RuntimeOrchestratorService {
   public async run(context: RuntimeContext) {
     context.platform.$events
       .pipe(
-        mergeMap(async (event) => {
-          await this.platformEventHandlePreprocessorService.process(
-            context,
-            event,
-          );
-          this.platformEventHandlerService.process(context, event);
-        }),
+        groupBy((event) => event.targetId ?? Symbol()),
+        mergeMap(($events) =>
+          $events.pipe(
+            buffer($events.pipe(debounceTime(2000))),
+            filter((events) => events.length > 0),
+          ),
+        ),
+        map((events) =>
+          events.length > 1
+            ? new EventBuffer(events[0].targetId!, events)
+            : events[0],
+        ),
       )
-      .subscribe();
+      .subscribe(async (eventOrEventBuffer) => {
+        await this.platformEventHandlePreprocessorService.process(
+          context,
+          eventOrEventBuffer,
+        );
+        this.platformEventHandlerService.process(context, eventOrEventBuffer);
+      });
   }
 }
