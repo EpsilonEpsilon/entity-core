@@ -18,7 +18,7 @@ class ConversationFactoryService {
     private readonly participantService: ParticipantService,
     private readonly chatService: ChatService,
   ) {}
-  async createRef(ref: IConversationRef, meta?: IFactoryMeta) {
+  async createRef(ref: IConversationRef, meta: IFactoryMeta) {
     const factoryMeta = structuredClone(meta);
     const platformChatId = factoryMeta?.chat.platformChatId;
     const platformId = factoryMeta?.sender.platformId;
@@ -29,12 +29,34 @@ class ConversationFactoryService {
 
     if (!factoryMeta?.sender.platformId)
       throw new Error('MessagePlatform Event sender platformId is missing');
-    const participant =
+    let participant =
       await this.participantService.findParticipantByPlatformId(platformId);
+    let chat = await this.chatService.findChatByPlatformChatId(platformChatId);
+    if (!participant) {
+      participant = await this.participantService.createOrUpdateParticipant({
+        platform: meta?.sender.platform,
+        firstName: meta.sender.firstName,
+        username: meta.sender.username,
+        lastName: meta?.sender.lastName,
+        platformUserId: meta?.sender.platformId,
+        meta: {
+          accessHash: meta.sender.accessHash,
+        },
+      });
+    }
 
-    const chat =
-      await this.chatService.findChatByPlatformChatId(platformChatId);
-    if (!participant || !chat)
+    if (!chat) {
+      chat = await this.chatService.createOrUpdateChat({
+        participantId: participant.id,
+        platform: meta.chat.platform,
+        platformChatId: meta.chat.platformChatId,
+        type: meta.chat.type,
+        title: meta.chat.title,
+        meta: { accessHash: meta.chat.accessHash },
+      });
+    }
+
+    if (!chat || !participant)
       throw new Error('Participant or Chat Entities are missing');
     const conversationMeta: IConversationMeta = {
       ...factoryMeta,
