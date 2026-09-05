@@ -16,6 +16,10 @@ class MessageHistoryService {
       authorId: meta.participantId,
     });
   }
+
+  async getMessageHistory(amount: number, params: { chatId: string }) {
+    return this.messageService.getLastMessages(amount, params);
+  }
 }
 
 export default MessageHistoryService;

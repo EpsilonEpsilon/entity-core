@@ -10,29 +10,49 @@ import { outdent } from 'outdent';
 @Injectable()
 export class IncomingMessageReactionPromptBuilderService {
   constructor() {}
-  public build(
-    context: RuntimeContext,
-    args: { incomingMessage: string; capabilities: Capability[] },
-  ) {
+
+  public buildIncomingMessageTextReaction(context: RuntimeContext) {
     const prompt = new Prompt();
-    prompt.use(new PlannerPromptTemplate(context, args.capabilities));
     prompt.use(new PersonaInformationTemplate(context));
     prompt.append(
       outdent`
-      
+     
       #Task
       
-      Your task is to determine which actions the persona should perform after receiving the latest message.
-      
+      Your task is to answer to the last user message in the history as ${context.personaContext.getEntity().name}.
+      Use other messages as context
       `,
     );
-    prompt.append(outdent`
-    
-    ## Incoming Message
-      
-    "${args.incomingMessage}"
-      
-    `);
+    prompt.use(new BasicRulesTemplate(context));
+
+    return prompt;
+  }
+
+  public buildIncomingMessagePlan(
+    context: RuntimeContext,
+    args: {
+      incomingMessageReaction: string;
+      capabilities: Capability[];
+    },
+  ) {
+    const prompt = new Prompt();
+    prompt.use(new PlannerPromptTemplate(context, args.capabilities));
+    prompt.append(
+      outdent`
+            # Task
+
+            Your task is to determine which actions the persona should perform in order to deliver the already-generated response.
+            
+            The response content has already been decided. Do not change its meaning.
+            
+            # Response
+            
+            <response>
+            ${args.incomingMessageReaction}
+            </response>
+      `,
+    );
+
     prompt.use(new BasicRulesTemplate(context));
     return prompt.toString();
   }

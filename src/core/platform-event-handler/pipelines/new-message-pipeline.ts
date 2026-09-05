@@ -17,7 +17,7 @@ export class NewMessagePipeline implements PipelineAbstract<NewPlatformMessage> 
       throw new Error('Conversation meta chat id is missing');
     if (!event.conversation.meta?.sender.id)
       throw new Error('Conversation ref sender id is missing');
-    void this.messageHistoryService.createMessageHistoryRecord(event.message, {
+    await this.messageHistoryService.createMessageHistoryRecord(event.message, {
       messageId: event.message_id.toString(),
       chatId: event.conversation.meta?.chat.id,
       participantId: event.conversation.meta?.sender.id,

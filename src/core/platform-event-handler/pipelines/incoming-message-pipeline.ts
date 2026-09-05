@@ -1,20 +1,22 @@
 import { PipelineAbstract } from './pipeline-abstract';
 import RuntimeContext from '../../runtime-context-builder/runtime-context';
 import { IncomingMessagePlatformEvent } from '../../platform/events/new-message/IncomingMessagePlatformEvent';
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { IncomingMessageReactionPlannerService } from '../../planner/planners/incoming-message-reaction-planner.service';
 import { PlaneResolverService } from '../../planner/plan-resolver.service';
-import { MessagesService } from '../../../entities/messages/messages.service';
 import { EventBuffer } from '../../platform/events/event-buffer';
+import MessageHistoryService from '../../message-history/message-history.service';
+import IncomingMessageReaction from '../../reaction/reactions/incoming-message-reaction';
 
 @Injectable()
 class IncomingMessagePipeline implements PipelineAbstract<
   IncomingMessagePlatformEvent | EventBuffer<IncomingMessagePlatformEvent>
 > {
-  private logger = new Logger('IncomingMessagePipeline');
   constructor(
     private planner: IncomingMessageReactionPlannerService,
     private planResolver: PlaneResolverService,
+    private messageHistory: MessageHistoryService,
+    private incomingMessageReactionService: IncomingMessageReaction,
   ) {}
 
   async process(
@@ -22,17 +24,29 @@ class IncomingMessagePipeline implements PipelineAbstract<
     input:
       IncomingMessagePlatformEvent | EventBuffer<IncomingMessagePlatformEvent>,
   ) {
-    const receivedMessage =
-      input instanceof EventBuffer
-        ? input.events.map((el) => el.message).join('/n')
-        : input.message;
-    this.logger.log(receivedMessage);
     const conversation =
       input instanceof EventBuffer
         ? input.last?.conversation
         : input.conversation;
+    if (!conversation?.meta?.chat.id) {
+      throw new Error('Conversation  chart id is missing');
+    }
+    const messageHistory = await this.messageHistory.getMessageHistory(3, {
+      chatId: conversation?.meta?.chat.id,
+    });
+
+    const incomingMessageTextReaction =
+      await this.incomingMessageReactionService.generateTextReaction({
+        context,
+        messageHistory: messageHistory.map((item) => ({
+          message: item.message,
+          author: item.author.firstName,
+          created_at: item.createdAt,
+        })),
+      });
+
     const plan = await this.planner.plan(context, {
-      receivedMessage: receivedMessage,
+      incomingMessageReaction: incomingMessageTextReaction,
     });
     await this.planResolver.resolve(context, { conversation }, plan);
   }

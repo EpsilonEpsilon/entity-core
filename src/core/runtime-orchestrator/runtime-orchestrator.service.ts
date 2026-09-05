@@ -18,6 +18,13 @@ export class RuntimeOrchestratorService {
         groupBy((event) => event.targetId ?? Symbol()),
         mergeMap(($events) =>
           $events.pipe(
+            // TODO: Replace debounce buffering with ExecutionRegistry.
+            // Future behavior:
+            // - start processing events immediately
+            // - cancel active execution when a new event arrives
+            // - merge events and restart execution
+            // - prevent cancellation after commit point
+            // - support delay / block / resume
             buffer($events.pipe(debounceTime(2000))),
             filter((events) => events.length > 0),
           ),

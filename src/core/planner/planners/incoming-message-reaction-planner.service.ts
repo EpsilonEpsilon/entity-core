@@ -7,9 +7,10 @@ import AppCapabilitiesRegistryService from '../../app-capabilities/app-capabilit
 import { IncomingMessageReactionPromptBuilderService } from '../../prompt-builder/incoming-message-reaction-prompt-builder.service';
 import { IPlan } from '../planner';
 import { Capability } from '../../../common/capability/capability';
+import { ThinkingLevel } from '@google/genai';
 
 interface ISendMessagePlannerContext {
-  receivedMessage: string;
+  incomingMessageReaction: string;
 }
 @Injectable()
 export class IncomingMessageReactionPlannerService implements PlannerInterface<ISendMessagePlannerContext> {
@@ -42,14 +43,19 @@ export class IncomingMessageReactionPlannerService implements PlannerInterface<I
       },
     };
 
-    const prompt = this.promptBuilder.build(context, {
-      incomingMessage: plannerContext.receivedMessage,
+    const prompt = this.promptBuilder.buildIncomingMessagePlan(context, {
+      incomingMessageReaction: plannerContext.incomingMessageReaction,
       capabilities,
     });
-    const response = await this.gemini.generate(prompt, {
-      responseMimeType: 'application/json',
-      responseSchema: recipeJsonSchema,
-    });
+
+    const response = await this.gemini.generate(
+      { role: 'model', text: prompt.toString() },
+      {
+        responseMimeType: 'application/json',
+        responseSchema: recipeJsonSchema,
+        thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
+      },
+    );
 
     return JSON.parse(response.text || '');
   }

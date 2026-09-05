@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import {
+  ContentListUnion,
   GenerateContentConfig,
   GenerateContentResponse,
   GoogleGenAI,
@@ -16,11 +17,11 @@ class GeminiService {
   }
 
   async generate(
-    prompt: string,
+    prompt: ContentListUnion,
     config?: GenerateContentConfig,
   ): Promise<GenerateContentResponse> {
     return await this.client.models.generateContent({
-      model: 'gemini-flash-latest',
+      model: 'gemini-3.5-flash',
       contents: prompt,
       config,
     });

@@ -3,7 +3,8 @@ import { AppDelayCapability } from './capabilities/app-delay-capability';
 
 @Injectable()
 class AppCapabilitiesRegistryService {
-  private capabilities = [new AppDelayCapability()] as const;
+  private capabilities = [] as const;
+  //new AppDelayCapability()
 
   getRegistry() {
     return this.capabilities;
