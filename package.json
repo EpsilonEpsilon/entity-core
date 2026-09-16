@@ -27,6 +27,7 @@
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/typeorm": "^11.0.3",
     "input": "^1.0.1",
+    "ioredis": "^6.0.0",
     "outdent": "^0.8.0",
     "pg": "^8.22.0",
     "reflect-metadata": "^0.2.2",

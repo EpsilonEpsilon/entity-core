@@ -48,4 +48,20 @@ export class MessagesService {
       })
     ).reverse();
   }
+
+  async getMessages(limit: number, offset: number, params: { chatId: string }) {
+    return (
+      await this.messageRepository.find({
+        where: { chat: { id: params.chatId } },
+        order: {
+          createdAt: 'DESC',
+        },
+        relations: {
+          author: true,
+        },
+        skip: offset,
+        take: limit,
+      })
+    ).reverse();
+  }
 }

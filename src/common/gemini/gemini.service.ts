@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import {
   ContentListUnion,
   GenerateContentConfig,
@@ -6,11 +6,16 @@ import {
   GoogleGenAI,
 } from '@google/genai';
 import { ConfigService } from '@nestjs/config';
+import { GEMINI_OPTIONS, type GeminiModuleOptions } from './Gemini.module';
 
 @Injectable()
 class GeminiService {
   private readonly client: GoogleGenAI;
-  constructor(private config: ConfigService) {
+  constructor(
+    private config: ConfigService,
+    @Inject(GEMINI_OPTIONS)
+    private geminiOptions: GeminiModuleOptions,
+  ) {
     this.client = new GoogleGenAI({
       apiKey: this.config.get('ai.gemini'),
     });
@@ -21,7 +26,7 @@ class GeminiService {
     config?: GenerateContentConfig,
   ): Promise<GenerateContentResponse> {
     return await this.client.models.generateContent({
-      model: 'gemini-3.5-flash',
+      model: this.geminiOptions.model || 'gemini-3.5-flash',
       contents: prompt,
       config,
     });

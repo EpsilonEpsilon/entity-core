@@ -37,4 +37,14 @@ export class ChatService {
   async findChatByPlatformChatId(platformChatId: string) {
     return this.chatRepository.findOne({ where: { platformChatId } });
   }
+
+  async findParticipantChats(
+    participantId: string,
+    relations?: { messages: boolean },
+  ) {
+    return this.chatRepository.find({
+      where: { participant: { id: participantId } },
+      relations: { messages: relations?.messages },
+    });
+  }
 }
